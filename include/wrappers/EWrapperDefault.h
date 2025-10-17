@@ -10,7 +10,7 @@
 class EWrapperDefault : public EWrapper {
 public:
   // === Implement ALL virtuals as empty ===
-  void tickPrice(TickerId, TickType, double, const TickAttrib&) override {}
+  virtual void tickPrice(TickerId, TickType, double, const TickAttrib&) override {}
   void tickSize(TickerId, TickType, Decimal) override {}
   void tickOptionComputation(TickerId, TickType, int, double, double, double, double, double, double, double, double) override {}
   void tickGeneric(TickerId, TickType, double) override {}

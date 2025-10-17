@@ -5,16 +5,19 @@
 #ifndef QUANTDREAMCPP_IBWRAPPERBASE_H
 #define QUANTDREAMCPP_IBWRAPPERBASE_H
 
-#include <thread>
 #include <atomic>
+#include <future>
 #include <iostream>
 #include <memory>
+#include <thread>
 
-#include "EReader.h"
-#include "EWrapperDefault.h"
-#include "EWrapper.h"
+#include "data_structures/options.h"
+
 #include "EClientSocket.h"
+#include "EReader.h"
 #include "EReaderOSSignal.h"
+#include "EWrapper.h"
+#include "EWrapperDefault.h"
 
 class IBWrapperBase : public EWrapperDefault {
 protected:
@@ -30,8 +33,13 @@ protected:
 
   // Thread to run the reader
   std::thread reader_thread;
-
 public:
+  // Mutex to protect access to the promises map
+  std::mutex promiseMutex;
+  // Create Promises map to handle asynchronous requests
+  std::unordered_map<int, std::promise<Contract>> contractDetailsPromises;  // ContractDetails
+  std::unordered_map<int, std::promise<IB::Options::ChainInfo>> optionChainPromises;
+
   // EReaderOSSignal (OS -> Operating System) act as synchronization object
   // It's job is to wake up reader when new data from socket is received
   EReaderOSSignal signal;
@@ -188,8 +196,18 @@ public:
    * @param details The contract details
    */
   void contractDetails(int reqId, const ContractDetails& details) override {
-    std::cout << "Contract details for " << details.contract.symbol
-              << " conId = " << details.contract.conId << std::endl;
+    Contract info = details.contract;
+    // Fulfill the promise for contract details if exists
+    // Lock the mutex to protect the map access
+    std::lock_guard<std::mutex> lock(promiseMutex);
+    // Find the promise for the given request ID
+    auto it = contractDetailsPromises.find(reqId);
+    // If found, set the value and erase the promise from the map
+    if (it != contractDetailsPromises.end()) {
+      // Set the value of the promise
+      it->second.set_value(std::move(info));
+      contractDetailsPromises.erase(it);
+    }
   }
 
   void securityDefinitionOptionalParameter(
@@ -201,15 +219,22 @@ public:
       const std::set<std::string>& expirations,
       const std::set<double>& strikes) override {
 
-    std::cout << "Option params for " << tradingClass << " on " << exchange << std::endl;
+    // Initialize ChainInfo struct
+    IB::Options::ChainInfo chain {
+      exchange, tradingClass, multiplier, expirations, strikes
+    };
 
-    std::cout << "Expirations:\n";
-    for (auto const& e : expirations) std::cout << "  " << e << std::endl;
-
-    std::cout << "Strikes:\n";
-    for (auto const& s : strikes) std::cout << "  " << s << std::endl;
+    // Fulfill the promise for option chain if exists
+    // Lock the mutex to protect the map access
+    std::lock_guard<std::mutex> lock(promiseMutex);
+    auto it = optionChainPromises.find(reqId);
+    // If found, set the value and erase the promise from the map
+    if (it != optionChainPromises.end()) {
+      it->second.set_value(std::move(chain));
+      optionChainPromises.erase(it);
+    }
   }
-
 };
+
 
 #endif  // QUANTDREAMCPP_IBWRAPPERBASE_H
