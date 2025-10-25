@@ -10,37 +10,31 @@
 #include "EClientSocket.h"
 #include "IBRequestIds.h"
 #include "IBSecType.h"
-#include "contracts/StockContracts.h"
-#include "data_structures/contracts.h"
-
+#include "helpers/perf_timer.h"
+#include "helpers/logger.h"
 
 namespace IB::Requests {
+
   inline Contract getContractDetails(IBWrapperBase& ib,
-                              Contract const& contract,
-                              int const reqId = IB::ReqId::BASE_CONTRACT_ID) {
+                                     const Contract& contract,
+                                     int reqId = IB::ReqId::BASE_CONTRACT_ID)
+  {
+    return IB::Helpers::measure([&]() -> Contract {
 
-    // Create a promise and future to get the contract details asynchronously
-    std::promise<Contract> contractPromise;
-    std::future<Contract> contractFuture = contractPromise.get_future();
+      auto contractDetails = IBWrapperBase::getSync<Contract>(ib, reqId, [&]() {
+        ib.client->reqContractDetails(reqId, contract);
+      });
 
-    {
-      std::lock_guard<std::mutex> lock(ib.promiseMutex);
-      // Store the promise in the map with the request ID
-      ib.contractDetailsPromises[reqId] = std::move(contractPromise);
-    }
+      // Log summary of received contract details
+      LOG_DEBUG("[IB] Contract details received: ",
+                contractDetails.symbol,
+                " (ConId: ", contractDetails.conId,
+                ") on ", contractDetails.exchange);
 
-    // Request contract details from IB TWS
-    ib.client -> reqContractDetails(reqId, contract);
+      return contractDetails;
 
-    // Wait for the future to be fulfilled and get the contract details
-    Contract contractDetails = contractFuture.get();
-
-    // Print summary of the received contract details
-    std::cout << "Contract details received: "
-    << contractDetails.symbol << " (ConId: " << contractDetails.conId << ")"
-    << " on " << contractDetails.exchange << std::endl;
-
-    return contractDetails;
+    }, "getContractDetails");
   }
-}
+}  // namespace IB::Requests
+
 #endif  // QUANTDREAMCPP_CONTRACTDETAILS_H
