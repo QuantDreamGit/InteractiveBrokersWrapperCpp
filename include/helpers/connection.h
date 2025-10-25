@@ -22,7 +22,7 @@ namespace IB::Helpers {
         LOG_INFO("[IB] Attempting connection (try #", attempt, ")...");
 
         if (!ib.connect(host, port, clientId)) {
-          LOG_DEBUG("[IB] Connection failed (attempt #", attempt, "), retrying...");
+          LOG_INFO("[IB] Connection failed (attempt #", attempt, "), retrying...");
           continue;
         }
 
@@ -38,7 +38,7 @@ namespace IB::Helpers {
           return true;
         }
 
-        LOG_ERROR("[IB] Connection established but no valid ID received — retrying...");
+        // LOG_DEBUG("[IB] Connection established but no valid ID received — retrying...");
         ib.disconnect();
       }
     }, "ensureConnected");

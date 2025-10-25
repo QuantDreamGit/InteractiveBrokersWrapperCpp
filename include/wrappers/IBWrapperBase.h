@@ -143,7 +143,7 @@ public:
 
     // Connect to TWS
     if (!client->eConnect(host, port, clientId)) {
-      LOG_ERROR("Failed to connect to IB TWS (host=", host, ", port=", port, ", clientId=", clientId, ")");
+      // LOG_ERROR("Failed to connect to IB TWS (host=", host, ", port=", port, ", clientId=", clientId, ")");
       return false;
     }
 
@@ -266,7 +266,7 @@ public:
    * Callback to print a message when the connection is closed
    */
   void connectionClosed() override {
-    LOG_WARN("Connection closed");
+    // LOG_WARN("Connection closed");
   }
 
   /**
