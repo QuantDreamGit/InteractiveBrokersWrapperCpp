@@ -432,12 +432,12 @@ public:
       default: break;
     }
 
-    // 🧩 Old debug logging preserved
+    // Old debug logging preserved
     LOG_DEBUG("[tickPrice] ID=", tickerId,
               "  Field=", IB::Helpers::tickTypeToString(field),
               "  Price=", price);
 
-    // ✅ Decide when we have enough data to fulfill
+    // Decide when we have enough data to fulfill
     bool ready = false;
     if (snap.mode == IB::MarketData::PriceType::LAST && snap.last > 0)
       ready = true;
@@ -449,7 +449,7 @@ public:
              snap.bid > 0 && snap.ask > 0 && snap.last > 0)
       ready = true;
 
-    // ✅ Fulfill and cancel once ready
+    // Fulfill and cancel once ready
     if (ready) {
       fulfillPromise(tickerId, snap);
       client->cancelMktData(tickerId);
