@@ -17,6 +17,8 @@ namespace IB::MarketData {
     double low = 0.0;
 
     PriceType mode = PriceType::SNAPSHOT;  // default to full snapshot
+    bool fulfilled = false;   // true once promise is satisfied
+    bool cancelled = false;   // true once cancelMktData() sent
   };
 }
 

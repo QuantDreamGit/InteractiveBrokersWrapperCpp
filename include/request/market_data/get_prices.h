@@ -11,15 +11,19 @@
 
 namespace IB::Requests {
 
-  inline MarketData::MarketSnapshot getSnapshot(IBWrapperBase& ib, const Contract& contract,
-                                                int reqId = IB::ReqId::MARKET_DATA_ID)
+  inline MarketData::MarketSnapshot getSnapshot(
+      IBWrapperBase& ib,
+      const Contract& contract,
+      int reqId = IB::ReqId::MARKET_DATA_ID)
   {
     return IB::Helpers::measure([&]() {
       auto& snap = ib.snapshotData[reqId];
       snap.mode = IB::MarketData::PriceType::SNAPSHOT;
+      snap.fulfilled = false;
+      snap.cancelled = false;
 
       return IBWrapperBase::getSync<MarketData::MarketSnapshot>(ib, reqId, [&]() {
-          ib.client->reqMktData(reqId, contract, "", false, false, nullptr);
+        ib.client->reqMktData(reqId, contract, "", false, false, nullptr);
       });
     }, "getSnapshot");
   }

@@ -418,7 +418,10 @@ public:
    */
   void tickPrice(TickerId tickerId, TickType field, double price, const TickAttrib& attrib) override {
     if (price <= 0) return;
-    auto& snap = snapshotData[tickerId];
+
+    auto it = snapshotData.find(tickerId);
+    if (it == snapshotData.end()) return;
+    auto& snap = it->second;
 
     switch (field) {
       case BID:  snap.bid  = price; break;
@@ -432,12 +435,11 @@ public:
       default: break;
     }
 
-    // Old debug logging preserved
     LOG_DEBUG("[tickPrice] ID=", tickerId,
               "  Field=", IB::Helpers::tickTypeToString(field),
               "  Price=", price);
 
-    // Decide when we have enough data to fulfill
+    // Determine if we have enough data
     bool ready = false;
     if (snap.mode == IB::MarketData::PriceType::LAST && snap.last > 0)
       ready = true;
@@ -449,24 +451,45 @@ public:
              snap.bid > 0 && snap.ask > 0 && snap.last > 0)
       ready = true;
 
-    // Fulfill and cancel once ready
-    if (ready) {
+    if (ready && !snap.fulfilled) {
+      snap.fulfilled = true;
       fulfillPromise(tickerId, snap);
-      client->cancelMktData(tickerId);
-      snapshotData.erase(tickerId);
 
-      LOG_DEBUG("[IB] Auto-canceled market data stream after fulfilling mode=",
-               IB::Helpers::tickTypeToString(static_cast<TickType>(field)));
+      // Early cancel: tell IB we’re done, mark so tickSnapshotEnd ignores it
+      if (!snap.cancelled) {
+        client->cancelMktData(tickerId);
+        snap.cancelled = true;
+      }
+
+      LOG_DEBUG("[IB] Fulfilled + cancelled snapshot reqId=", tickerId);
+      snapshotData.erase(it);
     }
   }
+
 
   void tickSnapshotEnd(int reqId) override {
     auto it = snapshotData.find(reqId);
     if (it == snapshotData.end()) return;
 
+    auto& snap = it->second;
     LOG_INFO("[IB] tickSnapshotEnd(", reqId, ")");
 
-    fulfillPromise(reqId, it->second);
+    // Skip if already cancelled/fulfilled
+    if (snap.cancelled || snap.fulfilled) {
+      LOG_DEBUG("[IB] Ignoring tickSnapshotEnd for reqId=", reqId,
+                " (cancelled or fulfilled already)");
+      snapshotData.erase(it);
+      return;
+    }
+
+    // Otherwise fulfill and cancel
+    fulfillPromise(reqId, snap);
+
+    if (!snap.cancelled) {
+      client->cancelMktData(reqId);
+      snap.cancelled = true;
+    }
+
     snapshotData.erase(it);
   }
 
@@ -497,6 +520,19 @@ public:
    * @param msg The error message
    */
   void error(int id, time_t time, int code, const std::string& msg, const std::string&) override {
+    // Ignore harmless "Can't find EId..." spam from IB
+    if (code == 300 && msg.find("Can't find EId") != std::string::npos) {
+      LOG_DEBUG("[IB] Ignored benign Error 300 (Can't find EId) for tickerId=", id);
+      return;
+    }
+
+    // Optionally ignore other harmless IB farm connection status messages
+    if (code == 2104 || code == 2107 || code == 2158) {
+      LOG_DEBUG("[IB] Info (farm status) [", code, "] ", msg);
+      return;
+    }
+
+    // Log all real errors
     LOG_ERROR("Error [", code, "] ", msg);
   }
 
