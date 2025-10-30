@@ -61,11 +61,13 @@ namespace IB::Orders::Management::Open {
    */
   inline void cancelAll(const IBWrapperBase& ib) {
     IB::Helpers::measure([&]() {
+      LOG_SECTION("Global Cancel of All Open Orders");
       LOG_WARN("[IB] Sending global cancel — ALL open orders will be cancelled!");
       OrderCancel cancelParams;
       cancelParams.extOperator = "";
       cancelParams.manualOrderIndicator = UNSET_INTEGER;
       ib.client->reqGlobalCancel(cancelParams);
+      LOG_SECTION_END();
     }, "cancelAllOrders");
   }
 

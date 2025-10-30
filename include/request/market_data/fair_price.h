@@ -5,7 +5,7 @@
 #ifndef QUANTDREAMCPP_FAIR_PRICE_H
 #define QUANTDREAMCPP_FAIR_PRICE_H
 
-#include "get_prices.h"
+#include "request/market_data/market_data.h"
 #include "wrappers/IBWrapperBase.h"
 #include "helpers/logger.h"
 
@@ -27,23 +27,18 @@ namespace IB::Options {
       const std::vector<std::string>& actions)
   {
     double fair = 0.0;
-    int reqId = 5000;
+    int reqId = IB::ReqId::SNAPSHOT_DATA_ID;
 
     for (size_t i = 0; i < legs.size(); ++i) {
       const auto& leg = legs[i];
       const auto& act = actions[i];
 
-      // --- Register contract metadata for callbacks ---
-      ib.reqIdToContract[reqId] = leg;
-
-      LOG_DEBUG("[IB] [FairPrice] Requesting market snapshot for ",
+      LOG_DEBUG("[IB] [FairPrice] Requesting midprice for ",
                 leg.symbol, " ", leg.right, " strike=", leg.strike);
 
-      // --- Get a one-time snapshot ---
-      auto snap = IB::Requests::getSnapshot(ib, leg, reqId);
+      ib.reqIdToContract[reqId] = leg;
+      double mid = IB::Requests::getMid(ib, leg, reqId);
 
-      // --- Compute midpoint ---
-      double mid = (snap.bid + snap.ask) / 2.0;
       if (mid <= 0.0) {
         LOG_WARN("[IB] [FairPrice] Invalid midprice for ",
                  leg.symbol, " ", leg.right, " @", leg.strike);
@@ -51,21 +46,19 @@ namespace IB::Options {
         continue;
       }
 
-      // --- Add or subtract mid based on leg direction ---
+      // BUY → negative (debit), SELL → positive (credit)
       fair += (act == "BUY" ? -mid : mid);
 
       LOG_INFO("[IB] [FairPrice] Leg ", i, " ",
                act, " ", leg.symbol, " ", leg.right,
-               " strike=", leg.strike,
-               " bid=", snap.bid, " ask=", snap.ask,
-               " mid=", mid);
+               " strike=", leg.strike, " mid=", mid);
 
       ++reqId;
     }
 
-    LOG_INFO("[IB] Computed fair price (midpoint-based) = ", fair);
     return fair;
   }
+
 
 }  // namespace IB::Options
 

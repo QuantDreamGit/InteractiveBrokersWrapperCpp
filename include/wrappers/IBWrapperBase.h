@@ -47,6 +47,9 @@ protected:
   // Thread to run the reader
   std::thread reader_thread;
 public:
+  // Initialization flag to avoid printing orders
+  bool initializing = true;
+
   // Mutex to protect access to the promises map
   std::mutex promiseMutex;
 
@@ -116,40 +119,47 @@ public:
    *       performance is not improved by a significant amount.
    */
   void connectAck() override {
-    // Set running to true to start the reader thread
-    running = true;
 
-    // Start the reader thread
-    LOG_INFO("Connection acknowledged, starting reader thread.");
+  }
+
+  bool connect(const char* host = "127.0.0.1", int port = 4002, int clientId = 0) {
+    if (client->isConnected()) {
+      LOG_INFO("[IB] [Connection] Already connected to TWS.");
+      return true;
+    }
+
+    LOG_INFO("[IB] [Connection] Connecting to TWS (host=", host, ", port=", port, ", clientId=", clientId, ")");
+
+    if (!client->eConnect(host, port, clientId)) {
+      LOG_ERROR("[IB] [Connection] Failed to connect to TWS/Gateway");
+      LOG_INFO("───────────────────────────────────────────────");
+      return false;
+    }
+
+    LOG_INFO("[IB] [Connection] Socket established");
+
+    // --- Start reader thread ---
+    running = true;
     reader_thread = std::thread([this]() {
         EReader reader(client.get(), &signal);
         reader.start();
+        LOG_INFO("[IB] [Connection] Reader thread started");
+        signal.issueSignal();
+
         while (running && client->isConnected()) {
             signal.waitForSignal();
             reader.processMsgs();
         }
+
+        LOG_DEBUG("[IB] [Connection] Reader thread stopped");
     });
-  }
 
-  /** * Connect to TWS
-   * @param host The host of the TWS (default: "
-   * @param port The port of the TWS (default: 7497)
-   * @param clientId The client ID (default: 0)
-   * @return true if connected, false otherwise
-   */
-  bool connect(const char* host = "127.0.0.1",
-               int port = 4002,
-               int clientId = 0) const {
+    // Allow reader to start
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
 
-    // Connect to TWS
-    if (!client->eConnect(host, port, clientId)) {
-      // LOG_ERROR("Failed to connect to IB TWS (host=", host, ", port=", port, ", clientId=", clientId, ")");
-      return false;
-    }
-
-    LOG_INFO("Connected to IB TWS (host=", host, ", port=", port, ", clientId=", clientId, ")");
     return true;
   }
+
 
   /**
    * @brief Retrieve a thread-safe snapshot of all current open orders.
@@ -256,6 +266,10 @@ public:
   static ResultType getSync(IBWrapperBase& ib, int reqId, RequestFunc sendRequest) {
     auto future = ib.createPromise<ResultType>(reqId);
     sendRequest();  // Trigger the IB API request
+    if (future.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
+      LOG_ERROR("Timeout waiting for reqId ", reqId);
+      throw std::runtime_error("IB request timeout");
+    }
     return future.get();  // Wait for and return the result
   }
 
@@ -303,6 +317,9 @@ public:
           const std::string& whyHeld,
           double mktCapPrice
   ) override {
+    // Suppress logs during initialization phase
+    if (initializing) return;
+
     double filledQty    = DecimalFunctions::decimalToDouble(filled);
     double remainingQty = DecimalFunctions::decimalToDouble(remaining);
 
@@ -334,6 +351,9 @@ public:
           const Order& order,
           const OrderState& orderState
   ) override {
+    // Suppress logs during initialization phase
+    if (initializing) return;
+
     IB::Orders::OpenOrdersInfo info;
     info.orderId = static_cast<int>(orderId);
     info.contract = contract;
@@ -423,6 +443,12 @@ public:
     if (it == snapshotData.end()) return;
     auto& snap = it->second;
 
+    // Optional: detect secType
+    std::string secType;
+    if (auto c = reqIdToContract.find(tickerId); c != reqIdToContract.end())
+      secType = c->second.secType;
+
+    // Update price fields
     switch (field) {
       case BID:  snap.bid  = price; break;
       case ASK:  snap.ask  = price; break;
@@ -436,56 +462,57 @@ public:
     }
 
     LOG_DEBUG("[tickPrice] ID=", tickerId,
-              "  Field=", IB::Helpers::tickTypeToString(field),
-              "  Price=", price);
+              " Field=", IB::Helpers::tickTypeToString(field),
+              " Price=", price,
+              " SecType=", secType.empty() ? "UNKNOWN" : secType);
 
-    // Determine if we have enough data
-    bool ready = false;
-    if (snap.mode == IB::MarketData::PriceType::LAST && snap.last > 0)
-      ready = true;
-    else if (snap.mode == IB::MarketData::PriceType::BID && snap.bid > 0)
-      ready = true;
-    else if (snap.mode == IB::MarketData::PriceType::ASK && snap.ask > 0)
-      ready = true;
-    else if (snap.mode == IB::MarketData::PriceType::SNAPSHOT &&
-             snap.bid > 0 && snap.ask > 0 && snap.last > 0)
-      ready = true;
+    // --- Unified readiness check ---
+    if (!snap.fulfilled && snap.readyForFulfill()) {
+      if (snap.last <= 0 && snap.hasBidAsk())
+        snap.last = (snap.bid + snap.ask) / 2.0;
 
-    if (ready && !snap.fulfilled) {
       snap.fulfilled = true;
       fulfillPromise(tickerId, snap);
 
-      // Early cancel: tell IB we’re done, mark so tickSnapshotEnd ignores it
-      if (!snap.cancelled) {
+      // auto-cancel only if snapshot mode
+      if (!snap.streaming && !snap.cancelled) {
         client->cancelMktData(tickerId);
         snap.cancelled = true;
       }
 
-      LOG_DEBUG("[IB] Fulfilled + cancelled snapshot reqId=", tickerId);
-      snapshotData.erase(it);
+      LOG_DEBUG("[IB] [tickPrice] Fulfilled "
+                ,(snap.streaming ? "(streaming)" : "(snapshot)")
+                ," reqId=",tickerId);
+
+      // clean snapshot entry only for one-off snapshots
+      if (!snap.streaming)
+        snapshotData.erase(it);
     }
   }
-
 
   void tickSnapshotEnd(int reqId) override {
     auto it = snapshotData.find(reqId);
     if (it == snapshotData.end()) return;
-
     auto& snap = it->second;
+
     LOG_INFO("[IB] tickSnapshotEnd(", reqId, ")");
 
-    // Skip if already cancelled/fulfilled
-    if (snap.cancelled || snap.fulfilled) {
-      LOG_DEBUG("[IB] Ignoring tickSnapshotEnd for reqId=", reqId,
-                " (cancelled or fulfilled already)");
+    if (snap.fulfilled) {
+      LOG_DEBUG("[IB] Already fulfilled reqId=", reqId, " — ignoring tickSnapshotEnd");
       snapshotData.erase(it);
       return;
     }
 
-    // Otherwise fulfill and cancel
-    fulfillPromise(reqId, snap);
+    if (snap.readyForFulfill()) {
+      snap.fulfilled = true;
+      fulfillPromise(reqId, snap);
+      LOG_DEBUG("[IB] Fulfilled snapshot at end (reqId=", reqId, ")");
+    } else {
+      LOG_WARN("[IB] tickSnapshotEnd(", reqId, ") without valid data — returning partial snapshot");
+      fulfillPromise(reqId, snap);
+    }
 
-    if (!snap.cancelled) {
+    if (!snap.streaming && !snap.cancelled) {
       client->cancelMktData(reqId);
       snap.cancelled = true;
     }
@@ -527,7 +554,8 @@ public:
     }
 
     // Optionally ignore other harmless IB farm connection status messages
-    if (code == 2104 || code == 2107 || code == 2158) {
+    if (code == 2104 || code == 2107 || code == 2158 || code == 2119 || code == 2108 ||
+        code == 2106 || code == 202) {
       LOG_DEBUG("[IB] Info (farm status) [", code, "] ", msg);
       return;
     }
@@ -541,10 +569,35 @@ public:
    * @param details The contract details
    */
   void contractDetails(int reqId, const ContractDetails& details) override {
-    Contract info = details.contract;
+    bool fulfilled = false;
 
-    // Try fulfilling the generic promise
-    fulfillPromise(reqId, std::move(info));
+    {
+      std::lock_guard<std::mutex> lock(promiseMutex);
+      auto it = genericPromises.find(reqId);
+      if (it != genericPromises.end()) {
+        try {
+          // Case 1: user requested full ContractDetails
+          auto ptr = std::any_cast<std::shared_ptr<std::promise<ContractDetails>>>(it->second);
+          ptr->set_value(details);
+          genericPromises.erase(it);
+          fulfilled = true;
+          LOG_DEBUG("[IB] fulfillPromise<ContractDetails> for reqId=", reqId);
+        } catch (const std::bad_any_cast&) {
+          // Not ContractDetails — will try Contract next
+        }
+      }
+    }
+
+    if (!fulfilled) {
+      // Case 2: user requested only Contract
+      fulfillPromise(reqId, details.contract);
+    }
+  }
+
+
+  void contractDetailsEnd(int reqId) override {
+    LOG_DEBUG("[IB] contractDetailsEnd(", reqId, ")");
+    // nothing to fulfill here; contractDetails() already did it
   }
 
   void securityDefinitionOptionalParameter(
@@ -590,10 +643,12 @@ public:
     LOG_INFO("[IB] Option chain data complete for reqId=", reqId,
              " (", it->second.size(), " exchanges)");
 
+
     for (const auto& c : it->second) {
       LOG_DEBUG("   - ", c.exchange, " (", c.expirations.size(),
                " expirations, ", c.strikes.size(), " strikes)");
     }
+    LOG_SECTION_END();
 
     // Fulfill with all exchanges
     fulfillPromise(reqId, it->second);
@@ -603,74 +658,92 @@ public:
   /**
    * @brief Called when IB sends option model computation updates (Greeks, implied vol, etc.)
    */
-void tickOptionComputation(
-    TickerId tickerId,
-    TickType tickType,
-    int tickAttrib,
-    double impliedVol,
-    double delta,
-    double optPrice,
-    double pvDividend,
-    double gamma,
-    double vega,
-    double theta,
-    double undPrice
-) override
-{
-    // --- Ignore incomplete values (IB sends DBL_MAX for missing data) ---
-    if (impliedVol == DBL_MAX || delta == DBL_MAX || gamma == DBL_MAX ||
-        vega == DBL_MAX || theta == DBL_MAX || optPrice == DBL_MAX)
-        return;
+    void tickOptionComputation(
+      TickerId tickerId,
+      TickType tickType,
+      int tickAttrib,
+      double impliedVol,
+      double delta,
+      double optPrice,
+      double pvDividend,
+      double gamma,
+      double vega,
+      double theta,
+      double undPrice) override {
+    // --- Step 1. Ignore completely empty updates ---
+    if (impliedVol == DBL_MAX && delta == DBL_MAX &&
+        gamma == DBL_MAX && vega == DBL_MAX &&
+        theta == DBL_MAX && optPrice == DBL_MAX)
+      return;
+
+    // --- Step 2. Ignore *partial* model ticks (only IV available) ---
+    bool partialModel = (delta == DBL_MAX || optPrice == DBL_MAX);
+    if (partialModel) {
+      LOG_DEBUG("[IB] [tickOptionComputation] Ignoring partial model tick (no delta/optPrice) for reqId=", tickerId);
+      return;
+    }
+
+    // --- Step 3. Resolve metadata (for logging and mapping) ---
+    std::string sym = "UNKNOWN", right = "?", expiry = "";
+    double strike = 0.0;
+    if (auto it = reqIdToContract.find(tickerId); it != reqIdToContract.end()) {
+      const Contract& opt = it->second;
+      sym = opt.symbol;
+      right = opt.right;
+      strike = opt.strike;
+      expiry = opt.lastTradeDateOrContractMonth;
+    }
 
     LOG_DEBUG("[tickOptionComputation] ID=", tickerId,
-              " Field=", IB::Helpers::tickTypeToString(tickType),
+              " ", sym, " ", right, " ", strike,
               " IV=", impliedVol,
               " Δ=", delta,
               " Γ=", gamma,
               " Θ=", theta,
               " ν=", vega,
               " OptPrice=", optPrice,
-              " UndPrice=", undPrice);
+              " UndPrice=", (undPrice == DBL_MAX ? "N/A" : std::to_string(undPrice)));
 
-    // --- Retrieve associated contract info for this reqId (if stored earlier) ---
-    auto it = reqIdToContract.find(tickerId);
-    if (it == reqIdToContract.end()) {
-        LOG_WARN("[IB] Missing contract metadata for reqId=", tickerId);
-        client->cancelMktData(tickerId);
+    // --- Step 4. Merge into existing snapshot (if any) ---
+    auto it = snapshotData.find(tickerId);
+    if (it != snapshotData.end()) {
+      auto& snap = it->second;
+
+      // Ignore Greeks entirely if QUOTES_ONLY mode
+      if (snap.mode == IB::MarketData::PriceType::QUOTES_ONLY)
         return;
+
+      // Fill Greeks fields
+      snap.impliedVol = (impliedVol == DBL_MAX ? 0.0 : impliedVol);
+      snap.delta      = (delta      == DBL_MAX ? 0.0 : delta);
+      snap.gamma      = (gamma      == DBL_MAX ? 0.0 : gamma);
+      snap.vega       = (vega       == DBL_MAX ? 0.0 : vega);
+      snap.theta      = (theta      == DBL_MAX ? 0.0 : theta);
+      snap.optPrice   = (optPrice   == DBL_MAX ? 0.0 : optPrice);
+      snap.undPrice   = (undPrice   == DBL_MAX ? 0.0 : undPrice);
+      snap.hasGreeks  = true;
+
+      // Fulfill only when ready according to mode
+      if (!snap.fulfilled && snap.readyForFulfill()) {
+        snap.fulfilled = true;
+        fulfillPromise(tickerId, snap);
+
+        if (!snap.streaming && !snap.cancelled) {
+          client->cancelMktData(tickerId);
+          snap.cancelled = true;
+        }
+
+        if (!snap.streaming) {
+          snapshotData.erase(it);
+          LOG_DEBUG("[IB] [tickOptionComputation] Fulfilled + cancelled snapshot reqId=", tickerId);
+        } else {
+          LOG_DEBUG("[IB] [tickOptionComputation] Fulfilled (streaming) reqId=", tickerId);
+        }
+        LOG_DEBUG("[IB] [tickOptionComputation] Fulfilled + cancelled snapshot reqId=", tickerId);
+      }
     }
-
-    const Contract& opt = it->second;
-
-    // --- Build custom Greeks struct with all metadata ---
-    IB::Options::Greeks g;
-    g.symbol        = opt.symbol;
-    g.right         = opt.right;
-    g.strike        = opt.strike;
-    g.expiry        = opt.lastTradeDateOrContractMonth;
-    g.exchange      = opt.exchange;
-    g.tradingClass  = opt.tradingClass;
-    g.impliedVol    = impliedVol;
-    g.delta         = delta;
-    g.gamma         = gamma;
-    g.vega          = vega;
-    g.theta         = theta;
-    g.optPrice      = optPrice;
-    g.undPrice      = undPrice;
-
-    // --- Forward the completed Greeks to your handler ---
-    if (onOptionGreeks)
-        onOptionGreeks(tickerId, g);
-
-    // --- Cancel subscription to free ticker slot ---
-    client->cancelMktData(tickerId);
-    LOG_DEBUG("[IB] Canceled market data subscription for reqId=", tickerId);
-}
-
-
+  }
 
 };
-
-
 
 #endif  // QUANTDREAMCPP_IBWRAPPERBASE_H

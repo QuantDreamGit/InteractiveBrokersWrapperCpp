@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "Order.h"
+#include "contracts/LegContract.h"
 #include "contracts/OptionContract.h"
 #include "helpers/logger.h"
 #include "helpers/perf_timer.h"
@@ -36,6 +37,8 @@ namespace IB::Orders::Options {
  * @param strikes Optional array of 4 strikes. If empty, 4 middle strikes from the chain are used.
  * @param totalQuantity The number of spreads
  * @param isBuy Whether to buy or sell the condor (true = buy condor = debit, false = sell condor = credit)
+ * @param margin Optional margin to have an execution price that is higher/lower than fairPrice
+ * @param autoStrikes Whether to auto-select strikes if none provided, added for clarity.
  */
 inline void placeIronCondor(
     IBWrapperBase& ib,
@@ -44,17 +47,24 @@ inline void placeIronCondor(
     const std::string& expiry,
     std::array<double,4> strikes = {0,0,0,0},
     int totalQuantity = 1,
-    bool isBuy = true)
+    bool isBuy = true,
+    double margin = 0.10,
+    bool autoStrikes = false)
 {
   auto roundToTick = [](double price, double tick = 0.05) {
     return std::round(price / tick) * tick;
   };
 
   IB::Helpers::measure([&]() {
+    LOG_SECTION("Iron Condor Order Placement");
     std::array<double,4> usedStrikes{};
 
     // --- Step 1. Auto-select middle strikes if none provided ---
     if (std::all_of(strikes.begin(), strikes.end(), [](double s){ return s == 0.0; })) {
+      // Be sure that auto strikes are requested intentionally
+      if (autoStrikes) {
+        // Extract and sort available strikes
+        // They should be already sorted but for safety we sort them again
         std::vector<double> sorted(chain.strikes.begin(), chain.strikes.end());
         std::sort(sorted.begin(), sorted.end());
 
@@ -65,17 +75,26 @@ inline void placeIronCondor(
 
         size_t mid = sorted.size() / 2;
         size_t start = (mid < 2) ? 0 : mid - 2;
+        // Ensure we don't go out of bounds
         if (start + 4 > sorted.size()) start = sorted.size() - 4;
 
+        // Select 4 middle strikes
         usedStrikes = { sorted[start], sorted[start+1], sorted[start+2], sorted[start+3] };
         LOG_INFO("[IB] Auto-selected middle strikes: ",
                  usedStrikes[0], ", ", usedStrikes[1], ", ",
                  usedStrikes[2], ", ", usedStrikes[3]);
+      } else {
+        LOG_WARN("No strike is provided for Iron Condor, and auto_strikes is disabled.");
+        throw std::runtime_error("Strikes must be provided for Iron Condor.");
+      }
+
+    // Otherwise, use provided strikes
     } else {
         usedStrikes = strikes;
         std::sort(usedStrikes.begin(), usedStrikes.end());
     }
 
+    // Construct leg strikes
     const double putBuy   = usedStrikes[0];
     const double putSell  = usedStrikes[1];
     const double callSell = usedStrikes[2];
@@ -85,40 +104,32 @@ inline void placeIronCondor(
              " exp=", expiry,
              " strikes=[", putBuy, ", ", putSell, ", ", callSell, ", ", callBuy, "]");
 
+    // Be sure to set exchange, currency, and multiplier
+    // Since data typically arrives from option chain func they are typically filled
     const std::string exch = chain.exchange.empty() ? "SMART" : chain.exchange;
     const std::string cur  = underlying.currency.empty() ? "USD" : underlying.currency;
     const std::string mult = chain.multiplier.empty() ? "100" : chain.multiplier;
 
     // --- Step 2. Helper to create and resolve each option leg ---
-    std::vector<Contract> legContracts;
-    std::vector<std::string> legActions;
+    std::vector<Contract> legContracts;   // Store Contracts
+    std::vector<std::string> legActions;  // Store BUY, SELL (used in fair price computation)
+    std::vector<ComboLeg> legs;           // Store Legs
 
-    auto makeLeg = [&](const std::string& right, double strike, const std::string& action) {
-        Contract opt = IB::Contracts::makeOption(
-            underlying.symbol, expiry, strike, right, exch, cur, mult,
-            chain.tradingClass, &ib, true);
+    legs.push_back(IB::Contracts::makeLeg(ib, underlying.symbol, expiry, putBuy,  "P",
+                           isBuy ? "BUY"  : "SELL", exch, cur, mult,
+                           chain.tradingClass, legContracts, legActions));
 
-        if (opt.conId == 0) {
-            LOG_ERROR("[IB] Failed to resolve leg ", right, " ", strike);
-            throw std::runtime_error("Contract resolution failed");
-        }
+    legs.push_back(IB::Contracts::makeLeg(ib, underlying.symbol, expiry, putSell, "P",
+                           isBuy ? "SELL" : "BUY", exch, cur, mult,
+                           chain.tradingClass, legContracts, legActions));
 
-        legContracts.push_back(opt);
-        legActions.push_back(action);
+    legs.push_back(IB::Contracts::makeLeg(ib, underlying.symbol, expiry, callSell,"C",
+                           isBuy ? "SELL" : "BUY", exch, cur, mult,
+                           chain.tradingClass, legContracts, legActions));
 
-        ComboLeg leg;
-        leg.conId = opt.conId;
-        leg.ratio = 1;
-        leg.action = action;
-        leg.exchange = exch;
-        return leg;
-    };
-
-    std::vector<ComboLeg> legs;
-    legs.push_back(makeLeg("P", putBuy,  isBuy ? "BUY"  : "SELL"));
-    legs.push_back(makeLeg("P", putSell, isBuy ? "SELL" : "BUY"));
-    legs.push_back(makeLeg("C", callSell,isBuy ? "SELL" : "BUY"));
-    legs.push_back(makeLeg("C", callBuy, isBuy ? "BUY"  : "SELL"));
+    legs.push_back(IB::Contracts::makeLeg(ib, underlying.symbol, expiry, callBuy, "C",
+                           isBuy ? "BUY"  : "SELL", exch, cur, mult,
+                           chain.tradingClass, legContracts, legActions));
 
     // --- Step 3. Create combo (BAG) contract ---
     Contract combo;
@@ -127,6 +138,7 @@ inline void placeIronCondor(
     combo.currency = cur;
     combo.exchange = exch;
 
+    // Legs must be added as pointers
     std::vector<std::shared_ptr<ComboLeg>> legPtrs;
     for (auto& leg : legs)
         legPtrs.push_back(std::make_shared<ComboLeg>(std::move(leg)));
@@ -137,22 +149,22 @@ inline void placeIronCondor(
     // --- Step 4. Compute fair price dynamically from bid/ask mids ---
     double fairPrice = IB::Options::computeFairPrice(ib, legContracts, legActions);
 
-    LOG_INFO("[IB] Computed fair price (midpoint-based) = ", fairPrice);
-
-    double margin = 0.10;
+    // Set margin if provided
     double limit = isBuy ? fairPrice - margin : fairPrice + margin;
     limit = roundToTick(std::max(0.01, limit), 0.05);
 
-    // --- Step 5. Create Adaptive (IBALGO) limit order ---
+    // --- Step 5. Create Adaptive limit order ---
     Order comboOrder;
-    comboOrder.action        = isBuy ? "BUY" : "SELL";
-    comboOrder.orderType     = "LMT";
-    comboOrder.totalQuantity = totalQuantity;
-    comboOrder.lmtPrice = limit;
-    comboOrder.tif           = "DAY";
-    comboOrder.algoStrategy  = "Adaptive";   // IB manages compliant routing
-    LOG_INFO("[IB] Sending Condor at limit=", comboOrder.lmtPrice,
-             " (fair mid=", fairPrice, ")");
+    comboOrder.action         = isBuy ? "BUY" : "SELL";
+    comboOrder.orderType      = "LMT";
+    comboOrder.totalQuantity  = totalQuantity;
+    comboOrder.lmtPrice       = limit;
+    comboOrder.tif            = "DAY";
+    comboOrder.algoStrategy   = "Adaptive";
+
+    LOG_INFO("[IB] Sending Condor at limit=", comboOrder.lmtPrice);
+
+    // Place order
     const int orderId = ib.nextOrderId();
     ib.client->placeOrder(orderId, combo, comboOrder);
 
@@ -160,6 +172,8 @@ inline void placeIronCondor(
              " (", comboOrder.action, " ", totalQuantity, "x ",
              underlying.symbol, " Condor, expiry=", expiry,
              ", limit=", fairPrice, ")");
+
+    LOG_SECTION_END();
   }, "placeIronCondor");
 }
 

@@ -7,7 +7,7 @@
 
 #include "IBRequestIds.h"
 #include "request/contracts/ContractDetails.h"
-#include "request/market_data/get_prices.h"
+#include "request/market_data/market_data.h"
 #include "wrappers/IBWrapperBase.h"
 
 namespace IB::Request {
@@ -29,7 +29,7 @@ namespace IB::Request {
       const std::string& preferredExchange = "") {
     // Run perf timer
     return IB::Helpers::measure([&]() -> IB::Options::ChainInfo {
-
+      LOG_SECTION("Chain Request");
       // --- Step 1: Resolve the underlying contract (ensure conId is valid) ---
       Contract resolved = IB::Requests::getContractDetails(ib, underlying);
       if (resolved.conId == 0) {
