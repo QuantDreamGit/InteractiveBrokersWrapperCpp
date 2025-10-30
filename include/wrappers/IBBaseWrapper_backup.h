@@ -1,6 +1,12 @@
-//
-// Created by user on 10/15/25.
-//
+/**
+| Wrapper               | Purpose                         | Key Methods                      |
+| --------------------- | ------------------------------- | -------------------------------- |
+| **IBBaseWrapper**     | Connection, threading, promises | connect, disconnect, getSync     |
+| **IBOrdersWrapper**   | Orders and statuses             | orderStatus, openOrderEnd        |
+| **IBMarketWrapper**   | Market data and options         | tickPrice, tickOptionComputation |
+| **IBAccountWrapper**  | Positions and PnL               | position, accountSummary         |
+| **IBStrategyWrapper** | Strategy integration            | custom event overrides           |
+*/
 
 #ifndef QUANTDREAMCPP_IBWRAPPERBASE_H
 #define QUANTDREAMCPP_IBWRAPPERBASE_H
@@ -25,6 +31,7 @@
 #include "data_structures/greeks_table.h"
 #include "data_structures/options.h"
 #include "data_structures/snapshots.h"
+#include "data_structures/positions.h"
 
 // Helpers includes
 #include "IBRequestIds.h"
@@ -32,7 +39,7 @@
 #include "helpers/logger.h"
 #include "helpers/tick_to_string.h"
 
-class IBWrapperBase : public EWrapperDefault {
+class IBBaseWrapper : public EWrapperDefault {
 protected:
   // Reader timeout in milliseconds
   // If no data is received within this time, the reader will timeout
@@ -68,6 +75,9 @@ public:
   std::function<void()> onOpenOrdersComplete;
   std::mutex openOrdersMutex;
 
+  // Position Management
+  std::vector<IB::Accounts::PositionInfo> positionBuffer;
+
   // Callback for option Greek data
   std::function<void(TickerId, const IB::Options::Greeks&)> onOptionGreeks;
 
@@ -80,14 +90,14 @@ public:
   /**
    * Constructor: initializes the EClientSocket with this wrapper and the signal
    */
-  IBWrapperBase() : signal(reader_timeout) {
+  IBBaseWrapper() : signal(reader_timeout) {
     client = std::make_unique<EClientSocket>(this, &signal);
   }
 
   /**
    * Destructor: disconnects from TWS if connected and joins the reader thread
    */
-  ~IBWrapperBase() override { IBWrapperBase::disconnect(); }
+  ~IBBaseWrapper() override { IBBaseWrapper::disconnect(); }
 
   virtual void disconnect() {
     // Set running to false to stop the reader thread
@@ -263,14 +273,26 @@ public:
    * @return ResultType The fulfilled result
    */
   template <typename ResultType, typename RequestFunc>
-  static ResultType getSync(IBWrapperBase& ib, int reqId, RequestFunc sendRequest) {
+  static ResultType getSync(IBBaseWrapper& ib, int reqId, RequestFunc sendRequest) {
+    // 1. Create the promise & future
     auto future = ib.createPromise<ResultType>(reqId);
-    sendRequest();  // Trigger the IB API request
-    if (future.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
-      LOG_ERROR("Timeout waiting for reqId ", reqId);
-      throw std::runtime_error("IB request timeout");
+
+    // 2. Trigger the actual IB API request
+    sendRequest();
+
+    // 3. Wait for fulfillment (blocking)
+    ResultType result;
+    try {
+      result = future.get();  // <-- blocks until fulfillPromise() called
+      LOG_DEBUG("[IB] [getSync] Future fulfilled and closed for reqId=", reqId,
+                " (type=", typeid(ResultType).name(), ")");
+    } catch (const std::exception& e) {
+      LOG_ERROR("[IB] [getSync] Exception while waiting for reqId=", reqId,
+                " (", e.what(), ")");
     }
-    return future.get();  // Wait for and return the result
+
+    // 4. Return the fulfilled value
+    return result;
   }
 
   // ---------------------------------------------------------------
@@ -437,7 +459,7 @@ public:
    * @brief Called when IB sends a price tick (bid, ask, last, open, close, etc.)
    */
   void tickPrice(TickerId tickerId, TickType field, double price, const TickAttrib& attrib) override {
-    if (price <= 0) return;
+    if (price < 0) return;
 
     auto it = snapshotData.find(tickerId);
     if (it == snapshotData.end()) return;
@@ -743,6 +765,48 @@ public:
       }
     }
   }
+
+  void accountSummary(
+      int reqId,
+      const std::string& account,
+      const std::string& tag,
+      const std::string& value,
+      const std::string& currency
+  ) override {
+    LOG_DEBUG("[AccountSummary] ", account, " ", tag, " = ", value, " ", currency);
+  }
+
+  void accountSummaryEnd(int reqId) override {
+    LOG_DEBUG("[AccountSummaryEnd] reqId=", reqId);
+    // Optionally fulfill a promise here if you’re doing synchronous calls
+  }
+
+  void position(
+      const std::string& account,
+      const Contract& contract,
+      Decimal position,
+      double avgCost
+  ) override {
+    double pos = DecimalFunctions::decimalToDouble(position);
+    if (pos == 0.0) return;
+
+    IB::Accounts::PositionInfo info{account, contract, pos, avgCost};
+    positionBuffer.push_back(info);
+
+    LOG_DEBUG("[Position] ", contract.symbol, " ", contract.secType,
+             " ", (pos > 0 ? "LONG " : "SHORT "),
+             std::abs(pos),
+             " @ avgCost=", avgCost);
+  }
+
+  void positionEnd() override {
+    LOG_DEBUG("[PositionEnd] Finished receiving positions.");
+
+    // Fulfill the promise (vector<PositionInfo>)
+    fulfillPromise<std::vector<IB::Accounts::PositionInfo>>(IB::ReqId::POSITION_ID, positionBuffer);
+    positionBuffer.clear();
+  }
+
 
 };
 

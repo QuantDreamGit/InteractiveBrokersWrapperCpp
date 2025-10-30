@@ -8,7 +8,7 @@
 #include "IBRequestIds.h"
 #include "request/contracts/ContractDetails.h"
 #include "request/market_data/market_data.h"
-#include "wrappers/IBWrapperBase.h"
+#include "wrappers/IBMarketWrapper.h"
 
 namespace IB::Request {
 
@@ -21,8 +21,10 @@ namespace IB::Request {
    *  - Filters strikes within ±strikeRangePct of the current price
    *  - Returns either the preferred exchange or SMART/first available
    */
+  template <typename T>
+  requires std::is_base_of_v<IBMarketWrapper, T>
   inline IB::Options::ChainInfo getOptionChain(
-      IBWrapperBase& ib,
+      T& ib,
       const Contract& underlying,
       int reqId = IB::ReqId::OPTION_CHAIN_ID,
       double strikeRangePct = 0.25,
@@ -38,12 +40,12 @@ namespace IB::Request {
       }
 
       // --- Step 2: Request option chain definitions ---
-      auto allChains = IBWrapperBase::getSync<std::vector<IB::Options::ChainInfo>>(ib, reqId, [&]() {
-        ib.client->reqSecDefOptParams(reqId,
-                                      resolved.symbol,
-                                      "",
-                                      resolved.secType,
-                                      static_cast<int>(resolved.conId));
+      auto allChains = IBBaseWrapper::getSync<std::vector<IB::Options::ChainInfo>>(ib, reqId, [&]() {
+          ib.client->reqSecDefOptParams(reqId,
+                                        resolved.symbol,
+                                        "",
+                                        resolved.secType,
+                                        static_cast<int>(resolved.conId));
       });
 
       LOG_DEBUG("[IB] Received option chain definitions for ", resolved.symbol,

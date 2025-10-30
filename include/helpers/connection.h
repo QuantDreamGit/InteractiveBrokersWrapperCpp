@@ -1,20 +1,38 @@
 #ifndef QUANTDREAMCPP_Connection_H
 #define QUANTDREAMCPP_Connection_H
 
-#include "logger.h"
-#include "perf_timer.h"
-#include "wrappers/IBWrapperBase.h"
-#include <thread>
 #include <chrono>
+#include <thread>
+
+#include "logger.h"
+#include "open_markets.h"
+#include "perf_timer.h"
+#include "wrappers/IBBaseWrapper.h"
 
 namespace IB::Helpers {
-
-  inline bool ensureConnected(IBWrapperBase& ib,
+  template <typename T>
+  requires std::is_base_of_v<IBBaseWrapper, T>
+  inline bool ensureConnected(T& ib,
                               const char* host = "127.0.0.1",
                               int const port = 4002,
                               int const clientId = 0,
-                              int const marketDataType = 1)  // 1 = real-time, 2 = frozen, 3 = delayed, 4 = delayed-frozen
+                              int const marketDataType = 1,  // 1 = real-time, 2 = frozen, 3 = delayed, 4 = delayed-frozen
+                              const std::string& region = "US")
   {
+    // Check market time first
+    auto status = IB::Helpers::getMarketStatus(region);
+    if (!status.isOpen) {
+      auto nextT = std::chrono::system_clock::to_time_t(status.nextOpen);
+      std::tm nextUTC{};
+      gmtime_r(&nextT, &nextUTC);
+
+      char buf[64];
+      std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M UTC", &nextUTC);
+
+      LOG_WARN("[IB] Market closed for region ", region,
+               ". Next open at ", buf);
+    }
+
     return IB::Helpers::measure([&]() -> bool {
       int attempt = 0;
 
@@ -37,14 +55,12 @@ namespace IB::Helpers {
         }
 
         if (ib.nextValidOrderId != -1) {
-          LOG_INFO("[IB] [Connection] Connection verified (nextValidId=", ib.nextValidOrderId.load(), ")");
+          LOG_INFO("[IB] [Connection] Connection verified (nextValidId=",
+                   ib.nextValidOrderId.load(), ")");
           LOG_SECTION_END();
-          // Set initializing to false so that orderStatus and openOrders logs are enabled
+
           ib.initializing = false;
-          // Set market data type
           ib.client->reqMarketDataType(marketDataType);
-
-
           return true;
         }
 
@@ -54,7 +70,6 @@ namespace IB::Helpers {
       }
     }, "ensureConnected");
   }
-
-}  // namespace IB::Helpers
+} // namespace IB::Helpers
 
 #endif  // QUANTDREAMCPP_Connection_H

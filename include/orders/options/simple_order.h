@@ -6,10 +6,10 @@
 #define QUANTDREAMCPP_SIMPLE_ORDER_H
 
 #include "Order.h"
-#include "wrappers/IBWrapperBase.h"
 #include "contracts/OptionContract.h"
-#include "helpers/perf_timer.h"
 #include "helpers/logger.h"
+#include "helpers/perf_timer.h"
+#include "wrappers/IBBaseWrapper.h"
 
 namespace IB::Orders::Options {
 
@@ -20,7 +20,7 @@ namespace IB::Orders::Options {
    * Typically used for testing or quick order placement.
    */
   inline void placeSimpleOrder(
-      IBWrapperBase& ib,
+      IBBaseWrapper& ib,
       const Contract& underlying,
       const IB::Options::ChainInfo& chain,
       const Order& order,

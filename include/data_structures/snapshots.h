@@ -58,7 +58,7 @@ namespace IB::MarketData {
 
         case PriceType::QUOTES_ONLY:
           // If one side missing, still fulfill after BID or ASK appears
-          return (bid > 0.0 || ask > 0.0);
+          return (bid > 0.0 & ask > 0.0);
 
         case PriceType::SNAPSHOT:
           // If greeks requested, require both quotes + greeks

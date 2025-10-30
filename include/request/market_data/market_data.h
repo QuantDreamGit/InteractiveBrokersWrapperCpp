@@ -6,8 +6,8 @@
 #define QUANTDREAMCPP_MARKETDATAREQUESTS_H
 
 #include "IBRequestIds.h"
-#include "wrappers/IBWrapperBase.h"
 #include "helpers/perf_timer.h"
+#include "wrappers/IBBaseWrapper.h"
 
 namespace IB::Requests {
 
@@ -15,7 +15,7 @@ namespace IB::Requests {
    * @brief Request a full option/market snapshot (bid/ask + Greeks if available)
    */
   inline MarketData::MarketSnapshot getSnapshot(
-      IBWrapperBase& ib,
+      IBBaseWrapper& ib,
       const Contract& contract,
       int reqId = IB::ReqId::MARKET_DATA_ID)
   {
@@ -28,7 +28,7 @@ namespace IB::Requests {
 
       ib.reqIdToContract[reqId] = contract;
 
-      return IBWrapperBase::getSync<MarketData::MarketSnapshot>(ib, reqId, [&]() {
+      return IBBaseWrapper::getSync<MarketData::MarketSnapshot>(ib, reqId, [&]() {
         ib.client->reqMktData(reqId, contract, "", false, false, nullptr);
       });
     }, "getSnapshot");
@@ -38,7 +38,7 @@ namespace IB::Requests {
    * @brief Request quotes only (bid/ask), ignoring Greeks entirely.
    */
   inline MarketData::MarketSnapshot getQuotes(
-      IBWrapperBase& ib,
+      IBBaseWrapper& ib,
       const Contract& contract,
       bool streaming = false,
       int reqId = IB::ReqId::MARKET_DATA_ID)
@@ -52,7 +52,7 @@ namespace IB::Requests {
 
     ib.reqIdToContract[reqId] = contract;
 
-    return IBWrapperBase::getSync<MarketData::MarketSnapshot>(ib, reqId, [&]() {
+    return IBBaseWrapper::getSync<MarketData::MarketSnapshot>(ib, reqId, [&]() {
       ib.client->reqMktData(
           reqId,
           contract,
@@ -67,7 +67,7 @@ namespace IB::Requests {
    * @brief Request Greeks only (no bid/ask fulfillment required)
    */
   inline MarketData::MarketSnapshot getGreeksOnly(
-      IBWrapperBase& ib,
+      IBBaseWrapper& ib,
       const Contract& contract,
       int reqId = IB::ReqId::MARKET_DATA_ID)
   {
@@ -80,7 +80,7 @@ namespace IB::Requests {
 
       ib.reqIdToContract[reqId] = contract;
 
-      return IBWrapperBase::getSync<MarketData::MarketSnapshot>(ib, reqId, [&]() {
+      return IBBaseWrapper::getSync<MarketData::MarketSnapshot>(ib, reqId, [&]() {
         ib.client->reqMktData(reqId, contract, "", false, false, nullptr);
       });
     }, "getGreeksOnly");
@@ -90,7 +90,7 @@ namespace IB::Requests {
    * @brief Request last traded price (of underlying or option)
    */
   inline double getLast(
-      IBWrapperBase& ib,
+      IBBaseWrapper& ib,
       const Contract& contract,
       int reqId = IB::ReqId::MARKET_DATA_ID)
   {
@@ -103,7 +103,7 @@ namespace IB::Requests {
 
       ib.reqIdToContract[reqId] = contract;
 
-      auto result = IBWrapperBase::getSync<MarketData::MarketSnapshot>(ib, reqId, [&]() {
+      auto result = IBBaseWrapper::getSync<MarketData::MarketSnapshot>(ib, reqId, [&]() {
         ib.client->reqMktData(reqId, contract, "", false, false, nullptr);
       });
       return result.last;
@@ -114,7 +114,7 @@ namespace IB::Requests {
    * @brief Request only bid price.
    */
   inline double getBid(
-      IBWrapperBase& ib,
+      IBBaseWrapper& ib,
       const Contract& contract,
       int reqId = IB::ReqId::MARKET_DATA_ID)
   {
@@ -127,7 +127,7 @@ namespace IB::Requests {
 
       ib.reqIdToContract[reqId] = contract;
 
-      auto result = IBWrapperBase::getSync<MarketData::MarketSnapshot>(ib, reqId, [&]() {
+      auto result = IBBaseWrapper::getSync<MarketData::MarketSnapshot>(ib, reqId, [&]() {
         ib.client->reqMktData(reqId, contract, "", false, false, nullptr);
       });
       return result.bid;
@@ -138,7 +138,7 @@ namespace IB::Requests {
    * @brief Request only ask price.
    */
   inline double getAsk(
-      IBWrapperBase& ib,
+      IBBaseWrapper& ib,
       const Contract& contract,
       int reqId = IB::ReqId::MARKET_DATA_ID)
   {
@@ -151,7 +151,7 @@ namespace IB::Requests {
 
       ib.reqIdToContract[reqId] = contract;
 
-      auto result = IBWrapperBase::getSync<MarketData::MarketSnapshot>(ib, reqId, [&]() {
+      auto result = IBBaseWrapper::getSync<MarketData::MarketSnapshot>(ib, reqId, [&]() {
         ib.client->reqMktData(reqId, contract, "", false, false, nullptr);
       });
       return result.ask;
@@ -162,7 +162,7 @@ namespace IB::Requests {
    * @brief Compute a midprice (average of bid and ask)
    */
   inline double getMid(
-      IBWrapperBase& ib,
+      IBBaseWrapper& ib,
       const Contract& contract,
       int reqId = IB::ReqId::MARKET_DATA_ID)
   {

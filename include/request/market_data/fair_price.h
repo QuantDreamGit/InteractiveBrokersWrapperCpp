@@ -5,9 +5,9 @@
 #ifndef QUANTDREAMCPP_FAIR_PRICE_H
 #define QUANTDREAMCPP_FAIR_PRICE_H
 
-#include "request/market_data/market_data.h"
-#include "wrappers/IBWrapperBase.h"
 #include "helpers/logger.h"
+#include "request/market_data/market_data.h"
+#include "wrappers/IBBaseWrapper.h"
 
 namespace IB::Options {
 
@@ -22,7 +22,7 @@ namespace IB::Options {
    * @return Fair combo value (positive = net credit, negative = net debit)
    */
   inline double computeFairPrice(
-      IBWrapperBase& ib,
+      IBBaseWrapper& ib,
       const std::vector<Contract>& legs,
       const std::vector<std::string>& actions)
   {

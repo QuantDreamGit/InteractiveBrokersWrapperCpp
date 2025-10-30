@@ -15,7 +15,7 @@
 #include "helpers/logger.h"
 #include "helpers/perf_timer.h"
 #include "request/market_data/fair_price.h"
-#include "wrappers/IBWrapperBase.h"
+#include "wrappers/IBBaseWrapper.h"
 
 namespace IB::Orders::Options {
 
@@ -41,7 +41,7 @@ namespace IB::Orders::Options {
  * @param autoStrikes Whether to auto-select strikes if none provided, added for clarity.
  */
 inline void placeIronCondor(
-    IBWrapperBase& ib,
+    IBBaseWrapper& ib,
     const Contract& underlying,
     const IB::Options::ChainInfo& chain,
     const std::string& expiry,

@@ -5,23 +5,24 @@
 #ifndef QUANTDREAMCPP_CONTRACTDETAILS_H
 #define QUANTDREAMCPP_CONTRACTDETAILS_H
 
-#include "wrappers/IBWrapperBase.h"
 #include "Contract.h"
 #include "EClientSocket.h"
 #include "IBRequestIds.h"
 #include "IBSecType.h"
-#include "helpers/perf_timer.h"
 #include "helpers/logger.h"
+#include "helpers/perf_timer.h"
+#include "wrappers/IBBaseWrapper.h"
 
 namespace IB::Requests {
-
-  inline Contract getContractDetails(IBWrapperBase& ib,
+  template <typename T>
+  requires std::is_base_of_v<IBBaseWrapper, T>
+  inline Contract getContractDetails(T& ib,
                                      const Contract& contract,
                                      int reqId = IB::ReqId::BASE_CONTRACT_ID)
   {
     return IB::Helpers::measure([&]() -> Contract {
 
-      auto contractDetails = IBWrapperBase::getSync<Contract>(ib, reqId, [&]() {
+      auto contractDetails = IBBaseWrapper::getSync<Contract>(ib, reqId, [&]() {
         ib.client->reqContractDetails(reqId, contract);
       });
 

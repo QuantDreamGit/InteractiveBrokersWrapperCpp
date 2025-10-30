@@ -5,18 +5,19 @@
 #ifndef QUANTDREAMCPP_GREEKS_H
 #define QUANTDREAMCPP_GREEKS_H
 
+#include <cmath>  // for std::isnan, std::isinf
+
 #include "IBRequestIds.h"
 #include "contracts/OptionContract.h"
 #include "data_structures/greeks_table.h"
-#include "wrappers/IBWrapperBase.h"
-#include <cmath> // for std::isnan, std::isinf
+#include "wrappers/IBBaseWrapper.h"
 
 namespace IB::Requests {
 
 
 
 inline std::vector<IB::Options::Greeks> getGreeksTable(
-    IBWrapperBase& ib,
+    IBBaseWrapper& ib,
     const Contract& underlying,
     const IB::Options::ChainInfo& chain,
     const std::string& right = "C",

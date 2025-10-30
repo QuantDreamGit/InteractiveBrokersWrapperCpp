@@ -4,76 +4,110 @@
 
 #ifndef QUANTDREAMCPP_OPEN_MARKETS_H
 #define QUANTDREAMCPP_OPEN_MARKETS_H
-#include "wrappers/IBWrapperBase.h"
+#include <chrono>
+#include <ctime>
+
+#include <chrono>
+#include <ctime>
+#include <string>
+#include <iomanip>
+
+#include <chrono>
+#include <ctime>
+#include <iomanip>
+#include <string>
+
 namespace IB::Helpers {
 
-  inline bool isMarketOpen(IBWrapperBase& ib, const Contract& contract) {
-    // Request contract details to get trading hours
-    int reqId = ib.nextOrderId();
-    auto details = IBWrapperBase::getSync<ContractDetails>(ib, reqId, [&]() {
-        ib.client->reqContractDetails(reqId, contract);
-    });
+struct MarketStatus {
+    bool isOpen;
+    std::chrono::system_clock::time_point nextOpen;
+    std::chrono::minutes timeToOpen;
+};
 
-    const std::string& hoursStr = details.tradingHours;
-    if (hoursStr.empty()) {
-        LOG_WARN("[IB] No trading hours info for ", contract.symbol);
-        return true; // fallback assume open
+inline MarketStatus getMarketStatus(const std::string& region = "US") {
+    using namespace std::chrono;
+    MarketStatus status;
+
+    // --- current UTC time ---
+    auto now = system_clock::now();
+    std::time_t t = system_clock::to_time_t(now);
+    std::tm utc{};
+    gmtime_r(&t, &utc);
+
+    // --- detect U.S. DST (approximation) ---
+    int year = utc.tm_year + 1900;
+    auto nth_weekday_of_month = [](int year, int month, int weekday, int nth) {
+        std::tm t = {};
+        t.tm_year = year - 1900;
+        t.tm_mon = month - 1;
+        t.tm_mday = 1;
+        std::mktime(&t);
+        int firstWeekday = t.tm_wday;
+        int day = 1 + ((7 + weekday - firstWeekday) % 7) + 7 * (nth - 1);
+        t.tm_mday = day;
+        std::mktime(&t);
+        return t;
+    };
+    auto dstStart = nth_weekday_of_month(year, 3, 0, 2);  // 2nd Sunday in March
+    auto dstEnd   = nth_weekday_of_month(year, 11, 0, 1); // 1st Sunday in Nov
+    std::time_t nowT = std::mktime(&utc);
+    bool isDST = (nowT >= std::mktime(&dstStart) && nowT < std::mktime(&dstEnd));
+
+    // --- US market hours in UTC ---
+    int openUTC = isDST ? 13 * 60 + 30 : 14 * 60 + 30;
+    int closeUTC = isDST ? 20 * 60 : 21 * 60;
+
+    int minutesUTC = utc.tm_hour * 60 + utc.tm_min;
+    bool open = (minutesUTC >= openUTC && minutesUTC < closeUTC);
+    status.isOpen = open;
+
+    // --- compute next open time ---
+    std::tm next = utc;
+    int daysToAdd = 0;
+
+    // Move to next weekday if weekend
+    int wday = utc.tm_wday; // 0=Sun, 6=Sat
+    if (wday == 6) daysToAdd = 2; // Sat -> Monday
+    else if (wday == 0) daysToAdd = 1; // Sun -> Monday
+    else if (minutesUTC >= closeUTC) daysToAdd = 1; // after close
+
+    next.tm_mday += daysToAdd;
+    next.tm_hour = openUTC / 60;
+    next.tm_min  = openUTC % 60;
+    next.tm_sec  = 0;
+    status.nextOpen = system_clock::from_time_t(timegm(&next));
+
+    // --- compute time-to-open (if closed) ---
+    if (!open) {
+        auto diff = duration_cast<minutes>(status.nextOpen - now);
+        status.timeToOpen = diff < minutes(0) ? minutes(0) : diff;
+    } else {
+        status.timeToOpen = minutes(0);
     }
 
-    // Format example from IB:
-    // "20251028:0930-1600;20251029:CLOSED;20251030:0930-1600"
-    auto now = std::chrono::system_clock::now();
-    std::time_t t = std::chrono::system_clock::to_time_t(now);
-    std::tm local{};
-  #ifdef _WIN32
-      localtime_s(&local, &t);
-  #else
-      localtime_r(&t, &local);
-  #endif
+    // --- logging ---
+    char buf[64];
+    auto nextT = system_clock::to_time_t(status.nextOpen);
+    std::tm nextUTC{};
+    gmtime_r(&nextT, &nextUTC);
+    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M UTC", &nextUTC);
 
-    char dateBuf[9];
-    std::strftime(dateBuf, sizeof(dateBuf), "%Y%m%d", &local);
-    std::string today(dateBuf);
-
-    // Find today's entry
-    size_t pos = hoursStr.find(today);
-    if (pos == std::string::npos) {
-        LOG_WARN("[IB] No trading hours for today in ", hoursStr);
-        return true;
+    if (open) {
+        LOG_INFO("[IB] US Market OPEN (09:30–16:00 ET, DST=", isDST, ")");
+    } else {
+        int hrs = status.timeToOpen.count() / 60;
+        int mins = status.timeToOpen.count() % 60;
+        LOG_INFO("[IB] US Market CLOSED — opens in ",
+                 (hrs > 0 ? std::to_string(hrs) + "h" : ""),
+                 std::setw(2),std::setfill('0'),mins,
+                 "min (next open ", buf, ")");
     }
 
-    // Extract hours block for today
-    auto segment = hoursStr.substr(pos, hoursStr.find(';', pos) - pos);
-    if (segment.find("CLOSED") != std::string::npos) {
-        LOG_INFO("[IB] Market CLOSED for ", contract.symbol);
-        return false;
-    }
-
-    // Parse hours "20251028:0930-1600"
-    auto colonPos = segment.find(':');
-    auto dashPos = segment.find('-');
-    if (colonPos == std::string::npos || dashPos == std::string::npos) {
-        LOG_WARN("[IB] Unrecognized trading hours format: ", segment);
-        return true;
-    }
-
-    std::string openStr = segment.substr(colonPos + 1, dashPos - colonPos - 1);
-    std::string closeStr = segment.substr(dashPos + 1);
-
-    int openH = std::stoi(openStr.substr(0, 2));
-    int openM = std::stoi(openStr.substr(2, 2));
-    int closeH = std::stoi(closeStr.substr(0, 2));
-    int closeM = std::stoi(closeStr.substr(2, 2));
-
-    int nowMins = local.tm_hour * 60 + local.tm_min;
-    int openMins = openH * 60 + openM;
-    int closeMins = closeH * 60 + closeM;
-
-    bool open = (nowMins >= openMins && nowMins <= closeMins);
-    LOG_INFO("[IB] Market ", (open ? "OPEN" : "CLOSED"),
-             " for ", contract.symbol, " (", openStr, "-", closeStr, ")");
-    return open;
-  }
+    return status;
+}
 
 } // namespace IB::Helpers
+
+
 #endif  // QUANTDREAMCPP_OPEN_MARKETS_H

@@ -7,7 +7,7 @@
 
 #include "contracts/OptionContract.h"
 #include "helpers/logger.h"
-#include "wrappers/IBWrapperBase.h"
+#include "wrappers/IBBaseWrapper.h"
 
 namespace IB::Contracts {
   /**
@@ -30,7 +30,7 @@ namespace IB::Contracts {
    * @return ComboLeg IB combo leg structure
    */
   inline ComboLeg makeLeg(
-      IBWrapperBase& ib,
+      IBBaseWrapper& ib,
       const std::string& underlyingSymbol,
       const std::string& expiry,
       double strike,

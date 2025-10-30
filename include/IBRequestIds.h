@@ -29,6 +29,8 @@ namespace IB::ReqId {
 
   constexpr int SNAPSHOT_DATA_ID = 4000;
 
+  constexpr int POSITION_ID = 5000;
+
 
 
 
