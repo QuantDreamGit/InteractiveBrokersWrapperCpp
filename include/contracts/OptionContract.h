@@ -5,10 +5,11 @@
 #ifndef QUANTDREAMCPP_OPTIONCONTRACT_H
 #define QUANTDREAMCPP_OPTIONCONTRACT_H
 
+#include <string>
+
 #include "Contract.h"
 #include "request/contracts/ContractDetails.h"  // for getContractDetails
-#include "wrappers/IBWrapperBase.h"
-#include <string>
+#include "wrappers/IBBaseWrapper.h"
 
 namespace IB::Contracts {
 
@@ -39,7 +40,7 @@ namespace IB::Contracts {
                              const std::string& currency = "USD",
                              const std::string& multiplier = "100",
                              const std::string& tradingClass = "",
-                             IBWrapperBase* ib = nullptr,
+                             IBBaseWrapper* ib = nullptr,
                              bool autoResolve = true)
   {
     Contract c;
