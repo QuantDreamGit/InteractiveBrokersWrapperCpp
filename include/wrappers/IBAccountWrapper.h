@@ -2,6 +2,7 @@
 #define QUANTDREAMCPP_IBACCOUNTWRAPPER_H
 
 #include "IBBaseWrapper.h"
+#include "../strategy/position_manager.h"
 
 /**
  * @file IBAccountWrapper.h
@@ -20,6 +21,14 @@
  */
 class IBAccountWrapper : public virtual IBBaseWrapper {
 public:
+  /**
+   * @brief Attach an external PositionManager instance for live updates.
+   *
+   * This allows the IB callback thread to forward incoming position events
+   * directly into the PositionManager (thread-safe).
+   */
+  void setPositionManager(PositionManager* pm) { positionManager_ = pm; }
+
   /**
    * @brief Callback invoked when account summary data is received
    *
@@ -67,6 +76,9 @@ public:
     IB::Accounts::PositionInfo info{account, contract, pos, avgCost};
     positionBuffer.push_back(info);
 
+    // Forward to PositionManager if attached (safe: PositionManager is thread-safe)
+    if (positionManager_) positionManager_->onPosition(info);
+
     LOG_DEBUG("[Position] ", contract.symbol, " ", contract.secType,
              " ", (pos > 0 ? "LONG " : "SHORT "),
              std::abs(pos),
@@ -82,8 +94,15 @@ public:
   void positionEnd() override {
     LOG_DEBUG("[PositionEnd] Finished receiving positions.");
     fulfillPromise<std::vector<IB::Accounts::PositionInfo>>(IB::ReqId::POSITION_ID, positionBuffer);
+
+    // Notify PositionManager that the full snapshot has been delivered
+    if (positionManager_) positionManager_->onPositionClear();
+
     positionBuffer.clear();
   }
+
+private:
+  PositionManager* positionManager_ = nullptr;
 };
 
 #endif
