@@ -1,0 +1,96 @@
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36" version="28.2.8">
+  <diagram name="Page-1" id="Y5qLizexL1QFgRmV_-HH">
+    <mxGraphModel dx="1426" dy="801" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="89tvDNwzAUqlcpnfk_Td-1" target="89tvDNwzAUqlcpnfk_Td-2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-1" value="&lt;b&gt;EWrapper&lt;/b&gt;&lt;div&gt;&lt;i&gt;(IB API Interface Layer)&lt;/i&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="329" y="60" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-2" value="&lt;b&gt;EWrapperDefault&lt;/b&gt;&lt;div&gt;&lt;i&gt;(Implements empty callbacks)&lt;/i&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="329" y="150" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-4" value="IBBaseWrapper&amp;nbsp;" style="swimlane;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="301" y="240" width="226" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-6" value="&lt;div&gt;&lt;ul&gt;&lt;li style=&quot;&quot;&gt;Manages EClientSocket &amp;amp; EReader&lt;/li&gt;&lt;li style=&quot;&quot;&gt;&lt;span style=&quot;&quot;&gt;Handles connection &amp;amp; promises&lt;/span&gt;&lt;/li&gt;&lt;li style=&quot;&quot;&gt;&lt;span style=&quot;&quot;&gt;Spawns reader thread&lt;/span&gt;&lt;/li&gt;&lt;/ul&gt;&lt;/div&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;spacing=-17;movable=1;resizable=1;rotatable=1;deletable=1;editable=1;locked=0;connectable=1;" vertex="1" parent="89tvDNwzAUqlcpnfk_Td-4">
+          <mxGeometry y="30" width="226" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-8" value="IBMarketWrapper&amp;nbsp;" style="swimlane;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="410" width="226" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-9" value="&lt;ul&gt;&lt;li style=&quot;&quot;&gt;Market data, ticks&lt;/li&gt;&lt;li style=&quot;&quot;&gt;Option greeks, chains&lt;/li&gt;&lt;/ul&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;spacing=-17;movable=1;resizable=1;rotatable=1;deletable=1;editable=1;locked=0;connectable=1;" vertex="1" parent="89tvDNwzAUqlcpnfk_Td-8">
+          <mxGeometry y="30" width="226" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-10" value="IBAccountWrapper" style="swimlane;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="540" y="410" width="226" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-11" value="&lt;ul&gt;&lt;li style=&quot;&quot;&gt;Positions, accounts&lt;/li&gt;&lt;li style=&quot;&quot;&gt;&lt;span style=&quot;&quot;&gt;Account summaries&lt;br&gt;&lt;/span&gt;&lt;/li&gt;&lt;/ul&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;spacing=-17;movable=1;resizable=1;rotatable=1;deletable=1;editable=1;locked=0;connectable=1;" vertex="1" parent="89tvDNwzAUqlcpnfk_Td-10">
+          <mxGeometry y="30" width="226" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-12" value="IBOrdersWrapper" style="swimlane;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="301" y="410" width="226" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-13" value="&lt;ul&gt;&lt;li style=&quot;&quot;&gt;Orders, statuses&lt;/li&gt;&lt;/ul&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;spacing=-17;movable=1;resizable=1;rotatable=1;deletable=1;editable=1;locked=0;connectable=1;" vertex="1" parent="89tvDNwzAUqlcpnfk_Td-12">
+          <mxGeometry y="30" width="226" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-14" value="IBStrategyWrapper&amp;nbsp;" style="swimlane;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="294" y="600" width="240" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-15" value="&lt;ul&gt;&lt;li style=&quot;&quot;&gt;Unified interface (data + orders + acct)&lt;/li&gt;&lt;li style=&quot;&quot;&gt;Inherits from all specialized wrappers&lt;/li&gt;&lt;li style=&quot;&quot;&gt;Used by strategies &amp;amp; higher layers&lt;/li&gt;&lt;/ul&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;spacing=-17;movable=1;resizable=1;rotatable=1;deletable=1;editable=1;locked=0;connectable=1;" vertex="1" parent="89tvDNwzAUqlcpnfk_Td-14">
+          <mxGeometry y="30" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-16" value="IBWrapperMonitor" style="swimlane;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="294" y="960" width="240" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-17" value="&lt;ul&gt;&lt;li style=&quot;&quot;&gt;Independent connection&amp;nbsp;&amp;nbsp;&lt;/li&gt;&lt;li style=&quot;&quot;&gt;Polling / order status change detection&amp;nbsp;&lt;/li&gt;&lt;li style=&quot;&quot;&gt;Non-blocking monitoring thread&amp;nbsp;&lt;/li&gt;&lt;/ul&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;rounded=0;spacing=-17;movable=1;resizable=1;rotatable=1;deletable=1;editable=1;locked=0;connectable=1;" vertex="1" parent="89tvDNwzAUqlcpnfk_Td-16">
+          <mxGeometry y="30" width="240" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-19" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="89tvDNwzAUqlcpnfk_Td-2" target="89tvDNwzAUqlcpnfk_Td-4">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0;exitY=0.75;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="89tvDNwzAUqlcpnfk_Td-6" target="89tvDNwzAUqlcpnfk_Td-8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-22" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.75;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="89tvDNwzAUqlcpnfk_Td-6" target="89tvDNwzAUqlcpnfk_Td-10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-23" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="89tvDNwzAUqlcpnfk_Td-6" target="89tvDNwzAUqlcpnfk_Td-12">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-24" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="89tvDNwzAUqlcpnfk_Td-9" target="89tvDNwzAUqlcpnfk_Td-14">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-25" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="89tvDNwzAUqlcpnfk_Td-13" target="89tvDNwzAUqlcpnfk_Td-14">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="580" y="560" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-26" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="89tvDNwzAUqlcpnfk_Td-11" target="89tvDNwzAUqlcpnfk_Td-14">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-28" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="89tvDNwzAUqlcpnfk_Td-29" target="89tvDNwzAUqlcpnfk_Td-30">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-29" value="&lt;b&gt;EWrapper&lt;/b&gt;&lt;div&gt;&lt;i&gt;(IB API Interface Layer)&lt;/i&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="329" y="780" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-31" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="89tvDNwzAUqlcpnfk_Td-30" target="89tvDNwzAUqlcpnfk_Td-16">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-30" value="&lt;b&gt;EWrapperDefault&lt;/b&gt;&lt;div&gt;&lt;i&gt;(Implements empty callbacks)&lt;/i&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="329" y="870" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-32" value="&lt;font style=&quot;font-size: 20px;&quot;&gt;&amp;nbsp;Monitor&lt;/font&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;align=left;verticalAlign=top;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="40" y="730" width="760" height="400" as="geometry" />
+        </mxCell>
+        <mxCell id="89tvDNwzAUqlcpnfk_Td-33" value="&lt;span style=&quot;font-size: 20px;&quot;&gt;&amp;nbsp;Strategy&lt;/span&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;align=left;verticalAlign=top;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="760" height="680" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
