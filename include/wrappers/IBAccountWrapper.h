@@ -26,8 +26,16 @@ public:
    *
    * This allows the IB callback thread to forward incoming position events
    * directly into the PositionManager (thread-safe).
+   * Also sets the PositionManager for market data callbacks if IBMarketWrapper is available.
    */
-  void setPositionManager(PositionManager* pm) { positionManager_ = pm; }
+  void setPositionManager(PositionManager* pm) { 
+    positionManager_ = pm;
+  }
+
+  /**
+   * @brief Get the current PositionManager instance (may be nullptr)
+   */
+  PositionManager* getPositionManager() const { return positionManager_; }
 
   /**
    * @brief Callback invoked when account summary data is received

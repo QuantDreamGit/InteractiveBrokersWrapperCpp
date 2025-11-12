@@ -64,6 +64,18 @@ public:
    */
   ~IBStrategyWrapper() override = default;
 
+protected:
+  /**
+   * @brief Override to provide PositionManager to IBMarketWrapper
+   *
+   * Returns the PositionManager instance from IBAccountWrapper so that
+   * IBMarketWrapper can call its market data callbacks.
+   */
+  PositionManager* getPositionManager() const override {
+    return IBAccountWrapper::getPositionManager();
+  }
+
+public:
   /**
    * @brief Custom order status handler with strategy-level logging
    *

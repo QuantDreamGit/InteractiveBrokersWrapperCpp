@@ -3,6 +3,7 @@
 
 #include "IBBaseWrapper.h"
 #include "helpers/tick_to_string.h"
+#include "strategy/position_manager.h"
 
 /**
  * @file IBMarketWrapper.h
@@ -23,7 +24,6 @@ class IBMarketWrapper : public virtual IBBaseWrapper {
 public:
   /**
    * @brief Called when IB sends a price tick (bid, ask, last, open, close, etc.)
-   *
    * @param tickerId Unique identifier for the market data request
    * @param field Type of price tick (BID, ASK, LAST, etc.)
    * @param price Price value for the tick
@@ -47,15 +47,32 @@ public:
 
     // Update price fields
     switch (field) {
-      case BID:  snap.bid  = price; break;
-      case ASK:  snap.ask  = price; break;
+      case BID:
+        snap.bid = price;
+        if (auto* pm = getPositionManager()) pm->onBid(tickerId, price);
+        break;
+      case ASK:
+        snap.ask = price;
+        if (auto* pm = getPositionManager()) pm->onAsk(tickerId, price);
+        break;
       case LAST:
-      case DELAYED_LAST: snap.last = price; break;
+      case DELAYED_LAST:
+        snap.last = price;
+        if (auto* pm = getPositionManager()) pm->onLast(tickerId, price);
+        break;
       case OPEN:  snap.open  = price; break;
       case CLOSE: snap.close = price; break;
       case HIGH:  snap.high  = price; break;
       case LOW:   snap.low   = price; break;
       default: break;
+    }
+
+    // Compute and notify mid price if both bid and ask are available
+    if (snap.hasBidAsk()) {
+      if (auto* pm = getPositionManager()) {
+        double mid = (snap.bid + snap.ask) / 2.0;
+        pm->onMid(tickerId, mid);
+      }
     }
 
     LOG_DEBUG("[tickPrice] ID=", tickerId,
@@ -70,6 +87,9 @@ public:
 
       snap.fulfilled = true;
       fulfillPromise(tickerId, snap);
+
+      // Notify PositionManager that a complete snapshot is ready
+      if (auto* pm = getPositionManager()) pm->onSnapshot(tickerId, snap);
 
       // auto-cancel only if snapshot mode
       if (!snap.streaming && !snap.cancelled) {
@@ -390,6 +410,16 @@ public:
     LOG_DEBUG("[IB] contractDetailsEnd(", reqId, ")");
     // nothing to fulfill here; contractDetails() already did it
   }
+
+protected:
+  /**
+   * @brief Get the PositionManager instance (may be nullptr)
+   * 
+   * This is a helper method that should be overridden in derived classes
+   * to return the PositionManager instance. In IBStrategyWrapper, this
+   * returns the instance from IBAccountWrapper.
+   */
+  virtual PositionManager* getPositionManager() const { return nullptr; }
 };
 
 #endif
